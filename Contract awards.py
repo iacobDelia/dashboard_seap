@@ -108,6 +108,94 @@ def write_all_dataset():
         )
     )
 
+def write_top_contracts():
+    st.divider()
+    col_chart_title, col_chart_sel = st.columns([2, 1])
+    with col_chart_title:
+        st.write("### Top contract awards in the last 30 days")
+    with col_chart_sel:
+        metric_choice = st.selectbox(
+            "Select metric to visualize:",
+            ["Total value of the contract award", "Number of offers received"]
+        )
+
+    if not df.empty:
+        # keep entries from the last 30 days
+        max_date = df['caPublicationDate'].max()
+        start_date = max_date - pd.Timedelta(days=30)
+        df_last_30 = df[df['caPublicationDate'] >= start_date].copy()
+
+        if df_last_30.empty:
+            st.warning("no contracts in the last 30 days")
+            return
+
+        df_authorities = load_data("seap_dataset/authorities")
+
+        # merge with authorities
+        if 'authorityId' in df_last_30.columns and 'authorityId' in df_authorities.columns:
+            df_last_30 = df_last_30.merge(
+                df_authorities[['authorityId', 'officialName']], 
+                on='authorityId', 
+                how='left'
+            )
+        else:
+            df_last_30['officialName'] = "Unknown Authority"
+
+        # map selection to dataframe columns
+        metric_map = {
+            "Total value of the contract award": ("totalAcquisitionValue", "Total Value (RON)"),
+            "Number of offers received": ("numberOfReceivedOffers", "Number of Offers")
+        }
+        val_col, display_col = metric_map[metric_choice]
+        
+        name_col = 'contractTitle' if 'contractTitle' in df_last_30.columns else 'title'
+
+        # filter and structure the top 10 view
+        top_df = df_last_30[['caNoticeId', name_col, 'officialName', val_col]].dropna(subset=[val_col])
+        
+        if val_col == "totalAcquisitionValue":
+            top_df[val_col] = top_df[val_col].round(2)
+            
+        # sort from highest to lowest
+        top_df = top_df.sort_values(by=val_col, ascending=False).head(10).reset_index(drop=True)
+        
+        # use a rank column
+        top_df['Rank'] = [f"#{i+1:02d}" for i in range(len(top_df))]
+
+        # render the bar chart
+        st.write(f"**Top 10 by {display_col}**")
+        chart_df = top_df.copy()
+        chart_df['Chart Axis'] = chart_df['Rank'] + " - " + chart_df['caNoticeId'].astype(str)
+
+        chart_df = chart_df.rename(columns={val_col: display_col})
+        chart_data = chart_df.set_index('Chart Axis')[[display_col]]
+        
+        st.bar_chart(chart_data, y=display_col, height=400, horizontal=True)
+
+        st.write("")
+
+        # render the data table
+        st.write("**Detailed data view**")
+        
+        top_df['Notice ID Link'] = top_df['caNoticeId'].apply(
+            lambda x: f"https://www.e-licitatie.ro/pub/notices/ca-notices/view-c/{x}"
+        )
+        
+        table_df = top_df[['Rank', 'Notice ID Link', name_col, 'officialName', val_col]]
+        table_df.columns = ['Rank', 'Notice ID', 'Contract Title', 'Contracting Authority', display_col]
+
+        st.dataframe(
+            table_df, 
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Notice ID": st.column_config.LinkColumn(
+                    "Notice ID", 
+                    display_text=r"(\d+)$"
+                )
+            }
+        )
+
 if not df_raw.empty:
     min_date = df_raw['caPublicationDate'].min().date()
     max_date = df_raw['caPublicationDate'].max().date()
@@ -123,6 +211,7 @@ if not df_raw.empty:
 
     if not df.empty:
         write_general_stats()
+        write_top_contracts()
         write_monthly_trends()
         write_all_dataset()
 
