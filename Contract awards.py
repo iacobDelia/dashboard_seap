@@ -72,6 +72,7 @@ def write_monthly_trends():
 
         timeline_df = df.groupby(pd.Grouper(key='caPublicationDate', freq='MS'))[col_name].agg(agg_func).reset_index()
         timeline_df.columns = ['Month', y_col]
+        timeline_df[y_col] = timeline_df[y_col].round(2)
         st.line_chart(timeline_df, x='Month', y=y_col, height=350)
 
 def write_all_dataset():
