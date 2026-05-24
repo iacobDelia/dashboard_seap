@@ -31,7 +31,7 @@ df_raw = load_data(os.path.join("seap_dataset/contract_awards_IF/", current_file
 df_all_contracts = load_data("seap_dataset/contracts/") 
 
 def write_general_stats():
-    anomalii = df[df['anomaly_label'] == -1]
+    anomalii = df[(df['IF_anomaly_label'] == -1) | (df['LOF_anomaly_label'] == -1)]
     single_bidder_count = len(df[df['numberOfReceivedOffers'] == 1])
 
     m1, m2, m3 = st.columns(3)
@@ -86,16 +86,29 @@ def write_all_dataset():
     with col_filter:
         view_choice = st.selectbox(
             "Filter by:",
-            ["All", "Anomalies"],
+            ["All", "Isolation Forest Anomalies", "Local Outlier Factor Anomalies"],
             label_visibility="collapsed"
         )
 
     df_to_display = df.copy()
-    if view_choice == "Anomalies":
-        df_to_display = df_to_display[df_to_display['anomaly_label'] == -1]
+    if view_choice == "Isolation Forest Anomalies":
+        df_to_display = df_to_display[df_to_display['IF_anomaly_label'] == -1]
+    if view_choice == "Local Outlier Factor Anomalies":
+        df_to_display = df_to_display[df_to_display['LOF_anomaly_label'] == -1]
+
+    # 1. Define the row-by-row styling function
+    def highlight_rows(row):
+        # Apply the OR condition we just discussed
+        if row['IF_anomaly_label'] == -1 or row['LOF_anomaly_label'] == -1:
+            # Returns a red background CSS string for every cell in this row
+            return ['background-color: rgba(255, 75, 75, 0.25)'] * len(row)
+        # Returns no styling for normal entries
+        return [''] * len(row)
+
+    styled_df = df_to_display.style.apply(highlight_rows, axis=1)
 
     st.dataframe(
-        df_to_display.sort_values(by='anomaly_score'), 
+        styled_df,
         width='stretch',
         column_order=(
             'caNoticeId', 'noticeNo', 'title', 'mainCPVCode', 'sysProcedureState', 
